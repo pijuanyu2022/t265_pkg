@@ -16,31 +16,33 @@ using namespace std;
 using namespace cv::ximgproc;
 
 enum class CameraSide { LEFT, RIGHT };
-int min_disparity = 0;
-int num_disparities = 112;
-int sad_window_size = 16;
-int p1 = 240;
-int p2 = 960;
-int disp_12_max_diff = 1;
-int pre_filter_cap = 1;
-int uniqueness_ratio = 10;
-int speckle_window_size = 100;
-int speckle_range = 32;
-
 // int min_disparity = 0;
-// int num_disparities = 64;
-// int sad_window_size = 3;
+// int num_disparities = 112;
+// int sad_window_size = 16;
 // int p1 = 240;
 // int p2 = 960;
-// int disp_12_max_diff = -1;
+// int disp_12_max_diff = 1;
 // int pre_filter_cap = 1;
 // int uniqueness_ratio = 10;
-// int speckle_window_size = 1;
+// int speckle_window_size = 100;
 // int speckle_range = 32;
 
+int min_disparity = 0;
+int num_disparities = 64;
+int sad_window_size = 3;
+int p1 = 240;
+int p2 = 960;
+int disp_12_max_diff = -1;
+int pre_filter_cap = 1;
+int uniqueness_ratio = 10;
+int speckle_window_size = 1;
+int speckle_range = 32;
+
 int mode = cv::StereoSGBM::MODE_SGBM_3WAY;
-double focal_length = 400;;
-double baseline = 0.124463;
+// double focal_length = 323.176;
+// double baseline = 64;
+double focal_length = 400;
+double baseline = 0.12;
 double stereo_cx = 519.5;
 double stereo_cy = 399.5;
 
@@ -49,17 +51,19 @@ void synched_img_callback(const sensor_msgs::ImageConstPtr& msg_left, const sens
 void undistort_rectify_image(Mat& src, Mat& dst, const CameraSide& side);
 void elaborateImages(const std_msgs::Header &header_msg, Mat& src, Mat& dst);
 void computePointcloud(const cv::Mat &input_disparity, sensor_msgs::PointCloud2 &pointcloud);
+void insertDepth32f(cv::Mat& depth);
+string type2str(int type);
 
 //////////////////////////////////////////////////
 // Declare all the calibration matrices as Mat variables.s
 //////////////////////////////////////////////////
 Mat lmapx, lmapy, rmapx, rmapy, Q;
 
-image_transport::Publisher pub_img_rect_left, pub_img_rect_right, pub_disparity;
+image_transport::Publisher pub_img_rect_left, pub_img_rect_right, pub_disparity, pub_depth;
 
-sensor_msgs::CameraInfo output_camera_info_left, output_camera_info_right;
+sensor_msgs::CameraInfo output_camera_info_left, output_camera_info_right, output_camera_info_depth;
 
-ros::Publisher left_camera_info_output_pub, right_camera_info_output_pub, pub_pointcloud;
+ros::Publisher left_camera_info_output_pub, right_camera_info_output_pub, pub_pointcloud, depth_camera_info_output_pub;
 
 std::string output_frame_id = "camera_fisheye1_optical_frame";
 
@@ -86,8 +90,8 @@ int main(int argc, char **argv)
 
   // The raw stereo images should be published as type sensor_msgs/Image
   image_transport::ImageTransport it(nh);
-  message_filters::Subscriber<sensor_msgs::Image> sub_img_left(nh, "/camera/fisheye1/image_raw", 1);
-  message_filters::Subscriber<sensor_msgs::Image> sub_img_right(nh, "/camera/fisheye2/image_raw", 1);
+  message_filters::Subscriber<sensor_msgs::Image> sub_img_left(nh, "/camera/fisheye1/image_raw", 10);
+  message_filters::Subscriber<sensor_msgs::Image> sub_img_right(nh, "/camera/fisheye2/image_raw", 10);
   
   // Having time synced stereo images might be important for other purposes, say generating accurate disparity maps. 
   // To sync the left and right image messages by their header time stamps, ApproximateTime is used.
@@ -97,15 +101,17 @@ int main(int argc, char **argv)
   sync.registerCallback(boost::bind(&synched_img_callback, _1, _2));
 
   // The output data include rectified images and their corresponding camera info
-  pub_img_rect_left  = it.advertise("/camera/fisheye1/rect/image", 1);
-  pub_img_rect_right = it.advertise("/camera/fisheye2/rect/image", 1);
-  pub_disparity = it.advertise("/disparity", 10);
-  pub_pointcloud = nh.advertise<sensor_msgs::PointCloud2>("/pointcloud2", 10);
+  pub_img_rect_left  = it.advertise("/camera/fisheye1/rect/image", 10);
+  pub_img_rect_right = it.advertise("/camera/fisheye2/rect/image", 10);
+  pub_disparity = it.advertise("/camera/disparity/image_raw", 10);
+  pub_depth = it.advertise("/camera/wls_disp/image_raw", 10);
+  pub_pointcloud = nh.advertise<sensor_msgs::PointCloud2>("/pointcloud2", 1000);
 
   // pub_disparity = it.advertise("/camera/disparity", 10);
 
-  left_camera_info_output_pub  = nh.advertise<sensor_msgs::CameraInfo>("/camera/fisheye1/rect/camera_info", 1);
-  right_camera_info_output_pub = nh.advertise<sensor_msgs::CameraInfo>("/camera/fisheye2/rect/camera_info", 1);
+  depth_camera_info_output_pub  = nh.advertise<sensor_msgs::CameraInfo>("/camera/wls_disp/camera_info", 10);
+  left_camera_info_output_pub  = nh.advertise<sensor_msgs::CameraInfo>("/camera/fisheye1/rect/camera_info", 10);
+  right_camera_info_output_pub = nh.advertise<sensor_msgs::CameraInfo>("/camera/fisheye2/rect/camera_info", 10);
 
   // Processing start
   ros::spin();
@@ -160,9 +166,9 @@ void init_rectification_map(string param_file_path)
   double B2 = P2.at<double>(1,1);
   nP2.at<double>(0,0) = B1/2.0;
   nP2.at<double>(1,1) = B2/2.0;
-
-  fisheye::initUndistortRectifyMap(K1, D1, R1, nP1, output_img_size, CV_32FC1, lmapx, lmapy);
-  fisheye::initUndistortRectifyMap(K2, D2, R2, nP2, output_img_size, CV_32FC1, rmapx, rmapy);
+  cout<<"The focal length is sadadad"<<nP1.at<double>(0,0)<<endl;
+  fisheye::initUndistortRectifyMap(K1, D1, R1, P1, output_img_size, CV_32FC1, lmapx, lmapy);
+  fisheye::initUndistortRectifyMap(K2, D2, R2, P2, output_img_size, CV_32FC1, rmapx, rmapy);
 
   // focal_length = nP1.at<double>(0,0);
   // baseline = std::abs(T[0]);
@@ -171,6 +177,10 @@ void init_rectification_map(string param_file_path)
   output_camera_info_left.height  = size_output[1];
   output_camera_info_left.D       = vector<double>(5, 0);
 
+  output_camera_info_depth.width   = size_output[0];
+  output_camera_info_depth.height  = size_output[1];
+  output_camera_info_depth.D       = vector<double>(5, 0);
+
   output_camera_info_right.width  = size_output[0];
   output_camera_info_right.height = size_output[1];
   output_camera_info_right.D      = vector<double>(5, 0);
@@ -178,13 +188,16 @@ void init_rectification_map(string param_file_path)
   for (int i = 0; i < 9; i++)
   {
     output_camera_info_left.K[i]  = K1.at<double>(i);
+    output_camera_info_depth.K[i]  = K1.at<double>(i);
     output_camera_info_right.K[i] = K2.at<double>(i);
     output_camera_info_left.R[i]  = R1.at<double>(i);
+    output_camera_info_depth.R[i]  = R1.at<double>(i);
     output_camera_info_right.R[i] = R2.at<double>(i);
   }  
   for (int i = 0; i < 12; i++)
   {
     output_camera_info_left.P[i]  = P1.at<double>(i);
+    output_camera_info_depth.P[i]  = P1.at<double>(i);
     output_camera_info_right.P[i] = P2.at<double>(i);
   }
   
@@ -218,6 +231,7 @@ void synched_img_callback(const sensor_msgs::ImageConstPtr& msg_left, const sens
     elaborateImages(header, dst_left, dst_right);
     output_camera_info_left.header = header;
     output_camera_info_left.header.frame_id = output_frame_id;
+
     output_camera_info_right.header = header;
     output_camera_info_right.header.frame_id = output_frame_id;
 
@@ -247,7 +261,7 @@ void elaborateImages(const std_msgs::Header &header_msg, Mat& dst_left, Mat& dst
 {
     // start depth image operations
     cv::Mat left_disp, left_disp8u, right_disp, right_disp8u, Q, image3D, disp_vis, disp_color;
-    cv::Mat filtered_disp, filtered_disp8u, disp_vis1;
+    cv::Mat filtered_disp, filtered_disp8u, disp_vis1, left_depth, left_depth8u;
     Ptr<DisparityWLSFilter> wls_filter;
 
     cv::Ptr<cv::StereoSGBM> left_matcher = cv::StereoSGBM::create(
@@ -267,37 +281,82 @@ void elaborateImages(const std_msgs::Header &header_msg, Mat& dst_left, Mat& dst
     left_matcher->compute(dst_left, dst_right, left_disp);
     Ptr<StereoMatcher> right_matcher = createRightMatcher(left_matcher);
     right_matcher->compute(dst_right, dst_left, right_disp);
+    // insertDepth32f(left_disp);
+
+    medianBlur(left_disp, left_disp, 3);
+    cv::normalize(left_disp, left_disp8u, 0, 255, cv::NORM_MINMAX, CV_8U);
+    // publish disparity image
+    sensor_msgs::ImagePtr out_disparity_msg;
+    out_disparity_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", left_disp8u).toImageMsg();
+    pub_disparity.publish(out_disparity_msg);
 
     // 3D image
     // Q = 
     // reprojectImageTo3D(left_disp, pointcloud, Q, false);
 
-    // crealte wls filter for disparity map
+    // crealte wls filter for disparity ma
+
+    
+    // depth map
+    // cout<<"The first value is"<<endl;
+    // cout<<left_disp8u.at<short>(800,848)<<endl;
+    // left_depth = left_disp8u;
+    // cout<<left_disp8u.at<short>(1,1)<<endl;
+    // left_disp8u.at<short>(1,1) = (300*0.64)/left_disp8u.at<short>(1,1);
+    // cout<<left_disp8u.at<short>(1,1)<<endl;
+
+
+  
+    // left_depth = (focal_length * baseline) / filtered_disp;
+    // medianBlur(left_depth, left_depth, 3);
+    // cv::normalize(left_depth, left_depth8u, 0, 255, cv::NORM_MINMAX, CV_8U);
+
     wls_filter = createDisparityWLSFilter(left_matcher);
     wls_filter->setLambda(8000.0);
     wls_filter->setSigmaColor(1.5);
     wls_filter->filter(left_disp,dst_left,filtered_disp,right_disp);
 
-    // normalize disparity map
+
+    // for (int i = 0; i < 800; i++)
+    // {
+    //   for (int j = 0; j < 848; j++)
+    //   {
+    //     if (filtered_disp.at<short>(i,j) < 1 && filtered_disp.at<short>(i,j) > -1 )
+    //     {
+    //       filtered_disp.at<short>(i,j) = 0;
+    //     }
+    //     else{
+    //       filtered_disp.at<short>(i,j) = (8 * focal_length * baseline)/filtered_disp.at<short>(i,j);
+    //     }
+    //   }
+    // }
+
+    // // normalize disparity map
     medianBlur(filtered_disp, filtered_disp, 3);
     cv::normalize(filtered_disp, filtered_disp8u, 0, 255, cv::NORM_MINMAX, CV_8U);
-    medianBlur(left_disp, left_disp, 3);
-    cv::normalize(left_disp, left_disp8u, 0, 255, cv::NORM_MINMAX, CV_8U);
+
 
     // disp_vis = (baseline*focal_length)/filtered_disp;
     // disp_vis = 255*(filtered_disp - min_disparity)/ num_disparities;
     // convertScaleAbs(disp_vis, disp_vis1, 1);
     // applyColorMap(disp_vis1, disp_color, 2);
 
-    // publish disparity image
-    sensor_msgs::ImagePtr out_disparity_msg;
-    out_disparity_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", filtered_disp8u).toImageMsg();
-    pub_disparity.publish(out_disparity_msg);
+
+
+    // publish depth image
+    sensor_msgs::ImagePtr out_depth_msg;
+    out_depth_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", filtered_disp8u).toImageMsg();
+    pub_depth.publish(out_depth_msg);
+
+
+    output_camera_info_depth.header = header_msg;
+    output_camera_info_depth.header.frame_id = output_frame_id;
+    depth_camera_info_output_pub.publish(output_camera_info_depth);
 
     // publish point could image
     // build pointcloud
     sensor_msgs::PointCloud2 pointcloud_msg;
-    computePointcloud(left_disp, pointcloud_msg);
+    computePointcloud(filtered_disp, pointcloud_msg);
     // cv::reprojectImageTo3D(filtered_disp, image3D, Q, true);
     // publish pointcloud
     pointcloud_msg.header.stamp = header_msg.stamp;
@@ -344,6 +403,7 @@ void computePointcloud(const cv::Mat &input_disparity, sensor_msgs::PointCloud2 
             if (disparity_value > 50 && disparity_value < 800)
             {
                 *pointcloud_z = (16 * focal_length * baseline) / disparity_value;
+                // *pointcloud_z = (2700*0.64) / disparity_value;
                 *pointcloud_x = *pointcloud_z * (x_pixels - stereo_cx) / focal_length;
                 *pointcloud_y = *pointcloud_z * (y_pixels - stereo_cy) / focal_length;
             }
@@ -354,3 +414,92 @@ void computePointcloud(const cv::Mat &input_disparity, sensor_msgs::PointCloud2 
         }
     }
 }
+
+
+//  void insertDepth32f(cv::Mat& depth)
+//  {
+//      const int width = depth.cols;
+//      const int height = depth.rows;
+//      short* data = (short*)depth.data;
+//      cv::Mat integralMap = cv::Mat::zeros(height, width, CV_64F);
+//      cv::Mat ptsMap = cv::Mat::zeros(height, width, CV_32S);
+//      double* integral = (double*)integralMap.data;
+//      int* ptsIntegral = (int*)ptsMap.data;
+//      memset(integral, 0, sizeof(double) * width * height);
+//      memset(ptsIntegral, 0, sizeof(int) * width * height);
+//      for (int i = 0; i < height; ++i)
+//      {
+//          int id1 = i * width;
+//          for (int j = 0; j < width; ++j)
+//          {
+//              int id2 = id1 + j;
+//              if (data[id2] > 1e-3)
+//              {
+//                  integral[id2] = data[id2];
+//                  ptsIntegral[id2] = 1;
+//              }
+//          }
+//      }
+//      for (int i = 0; i < height; ++i)
+//      {
+//          int id1 = i * width;
+//          for (int j = 1; j < width; ++j)
+//          {
+//              int id2 = id1 + j;
+//              integral[id2] += integral[id2 - 1];
+//              ptsIntegral[id2] += ptsIntegral[id2 - 1];
+//          }
+//      }
+//      for (int i = 1; i < height; ++i)
+//      {
+//          int id1 = i * width;
+//          for (int j = 0; j < width; ++j)
+//          {
+//              int id2 = id1 + j;
+//              integral[id2] += integral[id2 - width];
+//              ptsIntegral[id2] += ptsIntegral[id2 - width];
+//          }
+//      }
+//      int wnd;
+//      double dWnd = 2;
+//      while (dWnd > 1)
+//      {
+//          wnd = int(dWnd);
+//          dWnd /= 2;
+//          for (int i = 0; i < height; ++i)
+//          {
+//              int id1 = i * width;
+//              for (int j = 0; j < width; ++j)
+//              {
+//                  int id2 = id1 + j;
+//                  int left = j - wnd - 1;
+//                  int right = j + wnd;
+//                  int top = i - wnd - 1;
+//                  int bot = i + wnd;
+//                  left = max(0, left);
+//                  right = min(right, width - 1);
+//                  top = max(0, top);
+//                  bot = min(bot, height - 1);
+//                  int dx = right - left;
+//                  int dy = (bot - top) * width;
+//                  int idLeftTop = top * width + left;
+//                  int idRightTop = idLeftTop + dx;
+//                  int idLeftBot = idLeftTop + dy;
+//                  int idRightBot = idLeftBot + dx;
+//                  int ptsCnt = ptsIntegral[idRightBot] + ptsIntegral[idLeftTop] - (ptsIntegral[idLeftBot] + ptsIntegral[idRightTop]);
+//                  double sumGray = integral[idRightBot] + integral[idLeftTop] - (integral[idLeftBot] + integral[idRightTop]);
+//                  if (ptsCnt <= 0)
+//                  {
+//                      continue;
+//                  }
+//                  data[id2] = float(sumGray / ptsCnt);
+//              }
+//          }
+//          int s = wnd / 2 * 2 + 1;
+//          if (s > 201)
+//          {
+//              s = 201;
+//          }
+//          cv::GaussianBlur(depth, depth, cv::Size(s, s), s, s);
+//      }
+//  }
