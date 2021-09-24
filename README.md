@@ -54,4 +54,8 @@ Step3: source ~/catkin_slam/devel/setup.bash
        export TURTLEBOT3_MODEL=burger
 
        roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
+       
+       
+       xhost +
+       ssh omnid@omnid3 -Y
 
