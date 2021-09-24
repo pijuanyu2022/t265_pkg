@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 ## License: Apache 2.0. See LICENSE file in root directory.
 ## Copyright(c) 2019 Intel Corporation. All Rights Reserved.
@@ -32,7 +32,6 @@ import pyrealsense2 as rs
 import cv2
 import numpy as np
 from math import tan, pi
-from matplotlib import pyplot as plt
 
 """
 In this section, we will set up the functions that will translate the camera
@@ -179,11 +178,6 @@ try:
     stereo_size = (stereo_width_px, stereo_height_px)
     stereo_cx = (stereo_height_px - 1)/2 + max_disp
     stereo_cy = (stereo_height_px - 1)/2
-    print(stereo_cx)
-    print(stereo_cy)
-    print("The focal length is")
-    print(stereo_height_px)
-    print(T[0])
 
     # Construct the left and right projection matrices, the only difference is
     # that the right projection matrix should have a shift along the x axis of
@@ -238,34 +232,21 @@ try:
             # compute the disparity on the center of the frames and convert it to a pixel disparity (divide by DISP_SCALE=16)
             disparity = stereo.compute(center_undistorted["left"], center_undistorted["right"]).astype(np.float32) / 16.0
 
-            # print(disparity.shape)
-            depth = disparity.copy()
-            for i in range(300):
-                for j in range(412):
-                    if disparity[i][j]<1:
-                        depth[i][j]=0
-                    else:
-                        depth[i][j]=300*0.64/disparity[i][j]
             # re-crop just the valid part of the disparity
-            depth = depth[:,max_disp:]
-            # convert disparity to 0-255 and color it
-            depth_vis = 255*(depth - min_disp)/ num_disp
-            depth_color = cv2.applyColorMap(cv2.convertScaleAbs(depth_vis,1), cv2.COLORMAP_BONE)
-
             disparity = disparity[:,max_disp:]
+
             # convert disparity to 0-255 and color it
             disp_vis = 255*(disparity - min_disp)/ num_disp
-            disp_color = cv2.applyColorMap(cv2.convertScaleAbs(disp_vis,1), cv2.COLORMAP_BONE)
-
+            disp_color = cv2.applyColorMap(cv2.convertScaleAbs(disp_vis,1), cv2.COLORMAP_JET)
             color_image = cv2.cvtColor(center_undistorted["left"][:,max_disp:], cv2.COLOR_GRAY2RGB)
 
             if mode == "stack":
-                cv2.imshow(WINDOW_TITLE, np.hstack((disp_color, depth_color)))
+                cv2.imshow(WINDOW_TITLE, np.hstack((color_image, disp_color)))
             if mode == "overlay":
                 ind = disparity >= min_disp
-                color_image[ind, 0] = depth_color[ind, 0]
-                color_image[ind, 1] = depth_color[ind, 1]
-                color_image[ind, 2] = depth_color[ind, 2]
+                color_image[ind, 0] = disp_color[ind, 0]
+                color_image[ind, 1] = disp_color[ind, 1]
+                color_image[ind, 2] = disp_color[ind, 2]
                 cv2.imshow(WINDOW_TITLE, color_image)
         key = cv2.waitKey(1)
         if key == ord('s'): mode = "stack"
