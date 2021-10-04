@@ -17,19 +17,19 @@ step5: rviz
 NEW SEP 24th
 
 
-Step1: source ~/catkin_real/devel/setup.bash
+Step1: source ~/catkin_navigation/devel/setup.bash
 
 Step2: roslaunch realsense2_camera rs_t265.launch
 
-Step3: source ~/catkin_april/devel_isolated/setup.bash
+Step3: source ~/catkin_navigation/devel_isolated/setup.bash
 
 Step4: roslaunch test_pkg t265_fisheye_undistort.launch
 
-Step5: source ~/catkin_navi/devel/setup.bash
+Step5: source ~/catkin_navigation/devel/setup.bash
 
 Step6: roslaunch octomap_server octomap_mapping.launch
 
-Step7: source ~/catkin_navi/devel/setup.bash
+Step7: source ~/catkin_navigation/devel/setup.bash
 
 Step8: rosrun map_server map_saver --occ 90 --free 10 -f mymap2 map:=/projected_map
 
