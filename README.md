@@ -59,3 +59,19 @@ Step3: source ~/catkin_slam/devel/setup.bash
        xhost +
        ssh omnid@omnid3 -Y
 
+
+Method 1:
+
+       source ~/catkin_test/install/setup.bash
+
+       roslaunch omnid_control mobile_interface.launch robot_id:=3
+
+       ssh omnid@omnid3
+       
+       source ~/catkin_ws/devel/setup.bash
+       
+       roslaunch realsense2_camera rs_t265.launch
+       
+       source ~/catkin_test/install/setup.bash
+       
+       roslaunch test_pkg start2.launch
