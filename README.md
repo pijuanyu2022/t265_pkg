@@ -74,4 +74,4 @@ Method 1:
        
        source ~/catkin_test/install/setup.bash
        
-       roslaunch test_pkg start2.launch
+       roslaunch test_pkg no_t265.launch
