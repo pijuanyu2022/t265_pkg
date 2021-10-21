@@ -79,3 +79,7 @@ Method 1:
 chronyc:
 
 systemctl restart chronyd
+
+sudo chronyc clients
+
+sudo chronyc sources
