@@ -75,3 +75,7 @@ Method 1:
        source ~/catkin_test/install/setup.bash
        
        roslaunch test_pkg no_t265.launch
+       
+chronyc:
+
+systemctl restart chronyd
