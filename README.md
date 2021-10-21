@@ -83,3 +83,5 @@ systemctl restart chronyd
 sudo chronyc clients
 
 sudo chronyc sources
+
+chronyc tracking
