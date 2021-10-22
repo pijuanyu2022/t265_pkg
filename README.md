@@ -37,19 +37,22 @@ Step8: rosrun map_server map_saver --occ 90 --free 10 -f mymap2 map:=/projected_
 
 Simulation:
 
-Step1: source ~/catkin_slam/devel/setup.bash
+Step1: 
+       source ~/catkin_slam/devel/setup.bash
        
        export TURTLEBOT3_MODEL=burger
 
        roslaunch turtlebot3_gazebo turtlebot3_world.launch
 
-Step2: source ~/catkin_slam/devel/setup.bash
+Step2: 
+       source ~/catkin_slam/devel/setup.bash
 
        export TURTLEBOT3_MODEL=burger
 
        roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=$HOME/map1.yaml
 
-Step3: source ~/catkin_slam/devel/setup.bash
+Step3: 
+       source ~/catkin_slam/devel/setup.bash
 
        export TURTLEBOT3_MODEL=burger
 
