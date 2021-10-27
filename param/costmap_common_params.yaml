@@ -1,0 +1,23 @@
+obstacle_range: 2.5
+raytrace_range: 3.0
+footprint: [[ 0.3,  0.3], [-0.3,  0.3], [-0.3, -0.3], [ 0.3, -0.3]]
+footprint_padding: 0.03
+#robot_radius: ir_of_robot
+inflation_radius: 1.0
+transform_tolerance: 0.5
+
+map_type: costmap
+observation_sources: point_cloud_sensor
+
+point_cloud_sensor: {
+  sensor_frame: omnid3/base_link,
+  data_type: PointCloud2, 
+  topic: openni_points, 
+  expected_update_rate: 0.5, 
+  marking: true, 
+  clearing: true,
+  min_obstacle_height: 0.5,
+  max_obstacle_height: 2}
+
+    
+    
