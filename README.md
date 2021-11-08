@@ -105,15 +105,12 @@ sudo systemctl start chrony; sudo systemctl enable chrony;
 nano /etc/chrony/chrony.conf
 
        pool 0.jp.pool.ntp.org iburst maxsources 2
-
        pool 1.jp.pool.ntp.org iburst maxsources 2
-
        pool 2.jp.pool.ntp.org iburst maxsources 2
-
        pool 3.jp.pool.ntp.org iburst maxsources 2
 
-       allow 192.168.1.50 (depend on your computer)
-       
+       (depend on your computer)
+       allow 192.168.1.50 
        allow 192.168.1.50/24
        
 sudo systemctl restart chrony
@@ -128,7 +125,9 @@ sudo systemctl start chrony; sudo systemctl enable chrony;
 
 nano /etc/chrony/chrony.conf
 
-       server 192.168.1.50 (depend on your computer) prefer iburst
+       (depend on your computer)
+
+       server 192.168.1.50 prefer iburst
 
 sudo systemctl restart chrony
 
