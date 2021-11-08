@@ -102,7 +102,7 @@ sudo apt update; sudo apt install chrony -y;
 
 sudo systemctl start chrony; sudo systemctl enable chrony;
 
-nano /etc/chrony/chrony.conf
+sudo vim /etc/chrony/chrony.conf
 
        pool 0.jp.pool.ntp.org iburst maxsources 2
        pool 1.jp.pool.ntp.org iburst maxsources 2
@@ -123,7 +123,7 @@ sudo apt update; sudo apt install chrony -y;
 
 sudo systemctl start chrony; sudo systemctl enable chrony;
 
-nano /etc/chrony/chrony.conf
+sudo vim /etc/chrony/chrony.conf
 
        (depend on your computer)
 
