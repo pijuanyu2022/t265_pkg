@@ -91,3 +91,31 @@ sudo chronyc clients
 sudo chronyc sources
 
 chronyc tracking
+
+##chronyc tutorial:
+
+primary computer:
+
+sudo apt update; sudo apt install -y build-essential net-tools curl git software-properties-common;
+
+sudo apt update; sudo apt install chrony -y;
+
+sudo systemctl start chrony; sudo systemctl enable chrony;
+
+nano /etc/chrony/chrony.conf
+
+       pool 0.jp.pool.ntp.org iburst maxsources 2
+
+       pool 1.jp.pool.ntp.org iburst maxsources 2
+
+       pool 2.jp.pool.ntp.org iburst maxsources 2
+
+       pool 3.jp.pool.ntp.org iburst maxsources 2
+
+       allow 192.168.1.50 (depend on your computer)
+       
+       allow 192.168.1.50/24
+       
+sudo systemctl restart chrony
+sudo chronyc clients
+
