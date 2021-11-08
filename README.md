@@ -110,8 +110,8 @@ nano /etc/chrony/chrony.conf
        pool 3.jp.pool.ntp.org iburst maxsources 2
 
        (depend on your computer)
-       allow 192.168.1.57 
-       allow 192.168.1.57/24
+       allow 192.168.18.57 
+       allow 192.168.18.57/24
        
 sudo systemctl restart chrony
 sudo chronyc clients
@@ -127,7 +127,7 @@ nano /etc/chrony/chrony.conf
 
        (depend on your computer)
 
-       server 192.168.1.57 prefer iburst
+       server 192.168.18.57 prefer iburst
 
 sudo systemctl restart chrony
 
