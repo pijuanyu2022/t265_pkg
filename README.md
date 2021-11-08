@@ -92,9 +92,9 @@ sudo chronyc sources
 
 chronyc tracking
 
-##chronyc tutorial:
+## chronyc tutorial:
 
-primary computer:
+### primary computer:
 
 sudo apt update; sudo apt install -y build-essential net-tools curl git software-properties-common;
 
@@ -119,3 +119,19 @@ nano /etc/chrony/chrony.conf
 sudo systemctl restart chrony
 sudo chronyc clients
 
+
+### second computer:
+
+sudo apt update; sudo apt install chrony -y;
+
+sudo systemctl start chrony; sudo systemctl enable chrony;
+
+nano /etc/chrony/chrony.conf
+
+       server 192.168.1.50 (depend on your computer) prefer iburst
+
+sudo systemctl restart chrony
+
+sudo chronyc sources
+
+sudo chronyc sources -v
