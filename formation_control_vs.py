@@ -1,13 +1,11 @@
 #!/usr/bin/env python
-# -------------------------------------------------------------
-# This is virtual structure controller
-# -------------------------------------------------------------
 import rospy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from robot_control import RobotControl
 import numpy as np
 from numpy import pi
+import math
 import tf
 from math import acos, degrees, atan2, radians
 
@@ -17,59 +15,64 @@ class Formation_control(RobotControl):
 
         # initial ros node
         super(Formation_control, self).__init__()
-        rospy.init_node('formation_control1_vs', anonymous=True)
+        rospy.init_node('formation_control1', anonymous=True)
         print('INIT NODE')
 
         # publish velocity rostopic for three robots
-        twist_pub1 = rospy.Publisher('/omnid1/cmd_vel', Twist, queue_size=10)
-        twist_pub2 = rospy.Publisher('/omnid2/cmd_vel', Twist, queue_size=10)
-        twist_pub3 = rospy.Publisher('/omnid3/cmd_vel', Twist, queue_size=10)
+        twist_pub1 = rospy.Publisher('/turtle1/cmd_vel', Twist, queue_size=10)
+        twist_pub2 = rospy.Publisher('/turtle2/cmd_vel', Twist, queue_size=10)
+        twist_pub3 = rospy.Publisher('/turtle3/cmd_vel', Twist, queue_size=10)
         rospy.sleep(2.0)
 
-        # x0, y0 is the circumcenter of triangle, r is the radius of circumscribed circle
-        # theta_1d, theta_2d, theta_3d are bearing between 3 points and circumcenter
+        # get initial distance
         r, x0, y0, theta_1d, theta_2d, theta_3d = self.get_distance()
-
-        # theta_1t, theta_2t, theta_3t are initial degree of three robots
-        theta_1t, theta_2t, theta_3t = self.get_theta()
+        theta_1t = self.get_omnid_pose('omnid1_posi_z')
+        theta_2t = self.get_omnid_pose('omnid2_posi_z')
+        theta_3t = self.get_omnid_pose('omnid3_posi_z') 
+        if theta_1t < 0:
+            theta_1t = theta_1t + 2*pi
+        elif theta_2t < 0:
+            theta_2t = theta_2t + 2*pi
+        elif theta_3t < 0:
+            theta_3t = theta_3t + 2*pi
         
         theta_1t = self.degree_limit(theta_1t)
         theta_2t = self.degree_limit(theta_2t)
         theta_3t = self.degree_limit(theta_3t)
         rate = rospy.Rate(10)
         
-        while not rospy.is_shutdown():      
+        while not rospy.is_shutdown():  
             
-            # get current robot 1, robot 2 and robot 3 position and orientation
-            x_1 = self.get_omnid_pose('omnid1_posi_x')+0.85             # robot_1 x position
-            y_1 = self.get_omnid_pose('omnid1_posi_y')           # robot_1 y position
+            # get robot 1, robot 2 and robot 3 position and orientation
+            x_1 = self.get_omnid_pose('omnid1_posi_x')             # robot_1 x position
+            y_1 = self.get_omnid_pose('omnid1_posi_y')             # robot_1 y position
+            theta_1 = self.get_omnid_pose('omnid1_posi_z')                                          # robot_1 orientation theta
 
-            x_2 = self.get_omnid_pose('omnid2_posi_x')             # robot_2 x position
-            y_2 = self.get_omnid_pose('omnid2_posi_y')+0.41               # robot_2 y position
+            x_2 = self.get_omnid_pose('omnid2_posi_x')             # robot_2 x postion
+            y_2 = self.get_omnid_pose('omnid2_posi_y')             # robot_2 y position
+            theta_2 = self.get_omnid_pose('omnid2_posi_z')                                          # robot_2 orientation theta
 
             x_3 = self.get_omnid_pose('omnid3_posi_x')             # robot_3 x position
-            y_3 = self.get_omnid_pose('omnid3_posi_y')-0.41           # robot_3 y position
-            
-            theta_1, theta_2, theta_3 = self.get_theta()
+            y_3 = self.get_omnid_pose('omnid3_posi_y')             # robot_3 y position
+            theta_3 = self.get_omnid_pose('omnid3_posi_z')                                          # robot_3 orientation theta
 
             # get pose of three robots
             pos1 = np.array([[x_1], [y_1], [theta_1]])
             pos2 = np.array([[x_2], [y_2], [theta_2]])
-            pos3 = np.array([[x_3], [y_3], [theta_3]])
+            pos3 = np.array([[x_2], [y_3], [theta_3]])
 
             # publish twist1 msg
             twist1_msg = Twist()
             twist2_msg = Twist()
             twist3_msg = Twist()
-            
-            # twist matrix
+
             V1 = np.array([[self.get_omnid_pose('group_cmd_x')],         
                            [self.get_omnid_pose('group_cmd_y')],
                            [self.get_omnid_pose('group_cmd_z')]])
             V2 = V1
             V3 = V1
             
-            # x direction translation
+
             if self.get_omnid_pose('group_cmd_x') != 0 and self.get_omnid_pose('group_cmd_y') == 0:
                 print('x translation !')
                 # translation
@@ -98,13 +101,12 @@ class Formation_control(RobotControl):
                 
                 V3 = np.dot(V,G3)
             
-            # y direction translation
             if self.get_omnid_pose('group_cmd_y') != 0 and self.get_omnid_pose('group_cmd_x') == 0:
                 print('y translation !')
                 # translation
                 V = np.array([[self.get_omnid_pose('group_cmd_y'), 0, 0], 
-                              [0,self.get_omnid_pose('group_cmd_y'), 0],
-                              [0, 0, self.get_omnid_pose('group_cmd_z')]])
+                            [0,self.get_omnid_pose('group_cmd_y'), 0],
+                            [0, 0, self.get_omnid_pose('group_cmd_z')]])
                 
                 # robot 1
                 G1 = np.array([[np.sin(theta_1t)], 
@@ -127,7 +129,7 @@ class Formation_control(RobotControl):
                 
                 V3 = np.dot(V,G3)
                 
-            # corner translation
+
             if self.get_omnid_pose('group_cmd_y') != 0 and self.get_omnid_pose('group_cmd_x') != 0:
                 print('x and y translation !')
                 if self.get_omnid_pose('group_cmd_y') == self.get_omnid_pose('group_cmd_x'):
@@ -184,7 +186,7 @@ class Formation_control(RobotControl):
                     
                     V3 = np.dot(V,G3)
                     
-            # publish twist
+            
             twist1_msg.linear.x = V1[0]
             twist1_msg.linear.y = V1[1]
             twist1_msg.angular.z = V1[2]
@@ -220,33 +222,42 @@ class Formation_control(RobotControl):
                 twist_pub3.publish(twist3_msg)
             
             print('------------------------------------------')
-            print('The pose of robot 1 is', pos1)
-            print('The pose of robot 2 is', pos2)
-            print('The pose of robot 3 is', pos3)
+            print(self.get_omnid_pose('group_cmd_x'))
+            print(self.get_omnid_pose('group_cmd_y'))
+            print(theta_1t)
+            print(pi/4-theta_1t)
+            print(np.cos(abs(pi/4-theta_1t)))
+            print(abs(pi/4-theta_2t))
+            print(theta_2t)
+            print(np.cos(abs(pi/4-theta_2t)))
+            # print(twist1_msg)
+            # print(twist2_msg)
+            # print(twist3_msg)
 
             print('------------------------------------------')
 
             rate.sleep()
     
-    def get_distance(self):     
+    def get_distance(self):
         # get robot 1, robot 2 and robot 3 position and orientation
-        x_1 = self.get_omnid_pose('omnid1_posi_x')+0.85             # robot_1 x position
-        y_1 = self.get_omnid_pose('omnid1_posi_y')           # robot_1 y position
+        x_1 = self.get_omnid_pose('omnid1_posi_x')             # robot_1 x position
+        y_1 = self.get_omnid_pose('omnid1_posi_y')             # robot_1 y position
+        theta_1 = self.get_omnid_pose('omnid1_posi_z')                                          # robot_1 orientation theta
 
         x_2 = self.get_omnid_pose('omnid2_posi_x')             # robot_2 x position
-        y_2 = self.get_omnid_pose('omnid2_posi_y')+0.41               # robot_2 y position
+        y_2 = self.get_omnid_pose('omnid2_posi_y')             # robot_2 y position
+        theta_2 = self.get_omnid_pose('omnid2_posi_z')                                          # robot_2 orientation theta
 
         x_3 = self.get_omnid_pose('omnid3_posi_x')             # robot_3 x position
-        y_3 = self.get_omnid_pose('omnid3_posi_y')-0.41           # robot_3 y position
-
-        theta_1, theta_2, theta_3 = self.get_theta()          # get rotation degree
+        y_3 = self.get_omnid_pose('omnid3_posi_y')             # robot_3 y position
+        theta_3 = self.get_omnid_pose('omnid3_posi_z')                                          # robot_3 orientation theta
         
         x0, y0, r = self.circle(x_1, y_1, x_2, y_2, x_3, y_3)
 
         # point 1d bearing
         theta_1d = pi/2 - self.calculate_bearing(x_1, y_1, theta_1, x0, y0)
 
-        # point 2d bearing
+        # point 3d bearing
         theta_2d = pi/2 - self.calculate_bearing(x_2, y_2, theta_2, x0, y0)
 
         # point 3d bearing
@@ -255,7 +266,6 @@ class Formation_control(RobotControl):
         return r, x0, y0, theta_1d, theta_2d, theta_3d
 
     def circle(self, x1, y1, x2, y2, x3, y3):
-        # get circumcenter of triangle
         a = x1 - x2
         b = y1 - y2
         c = x1 - x3
@@ -272,7 +282,6 @@ class Formation_control(RobotControl):
         return x0, y0, r
 
     def calculate_bearing(self, x_1, y_1, theta_1, x_2, y_2):
-        # calculate the bearing
         dx = x_2 - x_1
         dy = y_2 - y_1
         bearing = atan2(dy, dx)
@@ -293,55 +302,14 @@ class Formation_control(RobotControl):
         return bearing
     
     def degree_limit(self, theta):
-        # set the limitation of degree
-        if theta <0:
-            theta = theta + 2*pi
-
         if theta > 2*pi:
             theta = theta - 2*pi
         elif theta < -2*pi:
             theta = theta + 2*pi
         return theta
 
-    def get_theta(self):
-        # get the theta degree of robot
-        # convert from quaternion to euler 
-        quaternion_1 = (
-            self.get_omnid_pose('omnid1_ori_x'),
-            self.get_omnid_pose('omnid1_ori_y'),
-            self.get_omnid_pose('omnid1_ori_z'),
-            self.get_omnid_pose('omnid1_ori_w')
-        )
-        euler_1 = tf.transformations.euler_from_quaternion(quaternion_1) 
-        yaw_1 = euler_1[2]                                       # get robot 1 rotation degree
-
-        quaternion_2 = (
-            self.get_omnid_pose('omnid2_ori_x'),
-            self.get_omnid_pose('omnid2_ori_y'),
-            self.get_omnid_pose('omnid2_ori_z'),
-            self.get_omnid_pose('omnid2_ori_w')
-        )
-        euler_2 = tf.transformations.euler_from_quaternion(quaternion_2) 
-        yaw_2 = euler_2[2]                                       # get robot 2 rotation degree 
-
-        quaternion_3 = (
-            self.get_omnid_pose('omnid3_ori_x'),
-            self.get_omnid_pose('omnid3_ori_y'),
-            self.get_omnid_pose('omnid3_ori_z'),
-            self.get_omnid_pose('omnid3_ori_w')
-        )
-        euler_3 = tf.transformations.euler_from_quaternion(quaternion_3) 
-        yaw_3 = euler_3[2]                                       # get robot 2 rotation degree   
-
-        theta_1 = yaw_1 
-        theta_2 = yaw_2
-        theta_3 = yaw_3
-
-        return theta_1, theta_2, theta_3
 
 
 if __name__ == '__main__':
     q = Formation_control()
     rospy.spin()
-
-
